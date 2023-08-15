@@ -1,0 +1,62 @@
+#
+# Copyright 2021 The Sigstore Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Verify
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  license-check:
+    name: license boilerplate check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.0.2
+      - name: Extract version of Go to use
+        run: echo "GOVERSION=$(cat Dockerfile|grep golang | awk ' { print $2 } ' | cut -d '@' -f 1 | cut -d ':' -f 2 | uniq)" >> $GITHUB_ENV
+      - uses: actions/setup-go@268d8c0ca0432bb2cf416faae41297df9d262d7f # v3.1.0
+        with:
+          go-version: ${{ env.GOVERSION }}
+
+      - name: Install addlicense
+        run: go install github.com/google/addlicense@v1.0.0
+      - name: Check license headers
+        run: |
+          set -e
+          addlicense -l apache -c 'The Sigstore Authors' -v *
+          git diff --exit-code
+
+  golangci:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.0.2
+      - name: Extract version of Go to use
+        run: echo "GOVERSION=$(cat Dockerfile|grep golang | awk ' { print $2 } ' | cut -d '@' -f 1 | cut -d ':' -f 2 | uniq)" >> $GITHUB_ENV
+      - uses: actions/setup-go@268d8c0ca0432bb2cf416faae41297df9d262d7f # v3.1.0
+        with:
+          go-version: ${{ env.GOVERSION }}
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@537aa1903e5d359d0b27dbc19ddd22c5087f3fbc # v3.2.0
+        timeout-minutes: 5
+        with:
+          version: v1.49

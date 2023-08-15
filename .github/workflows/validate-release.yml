@@ -1,0 +1,77 @@
+#
+# Copyright 2021 The Sigstore Authors.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: CI-Validate-Release-Job
+
+on:
+  push:
+    branches:
+      - main
+      - 'release-**'
+  pull_request:
+
+jobs:
+  validate-release-job:
+    runs-on: ubuntu-latest
+
+    permissions:
+      actions: none
+      checks: none
+      contents: none
+      deployments: none
+      issues: none
+      packages: none
+      pull-requests: none
+      repository-projects: none
+      security-events: none
+      statuses: none
+
+    env:
+      CROSS_BUILDER_IMAGE: ghcr.io/gythialy/golang-cross:v1.19.3-0@sha256:1072190e76d68f455f1bedb7430a633916b6629a722c42246037ac518fdb0ff2
+      COSIGN_IMAGE: gcr.io/projectsigstore/cosign:v1.13.1@sha256:fd5b09be23ef1027e1bdd490ce78dcc65d2b15902e1f4ba8e04f3b4019cc1057
+
+    steps:
+      - uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.0.2
+      - name: Extract version of Go to use
+        run: echo "GOVERSION=$(cat Dockerfile|grep golang | awk ' { print $2 } ' | cut -d '@' -f 1 | cut -d ':' -f 2 | uniq)" >> $GITHUB_ENV
+      - uses: actions/setup-go@268d8c0ca0432bb2cf416faae41297df9d262d7f # v3.1.0
+        with:
+          go-version: ${{ env.GOVERSION }}
+
+      - uses: anchore/sbom-action/download-syft@b5042e9d19d8b32849779bfe17673ff84aec702d # v0.12.0
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@ff11ca24a9b39f2d36796d1fbd7a4e39c182630a # v3.1.0
+        with:
+          install-only: true
+
+      - name: Check Signature
+        run: |
+          docker run --rm \
+          -e COSIGN_EXPERIMENTAL=true \
+          -e TUF_ROOT=/tmp \
+          $COSIGN_IMAGE \
+          verify \
+          $CROSS_BUILDER_IMAGE
+
+      - name: snaphot
+        run: make snapshot
+        env:
+          PROJECT_ID: honk-fake-project
+          RUNTIME_IMAGE: gcr.io/distroless/static:debug-nonroot
+
+      - name: check binaries
+        run: |
+          ./dist/rekor-server-linux-amd64 version
+          ./dist/rekor-cli-linux-amd64 version
