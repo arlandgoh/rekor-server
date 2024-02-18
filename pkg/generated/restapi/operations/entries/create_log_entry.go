@@ -23,12 +23,11 @@ package entries
 
 import (
 	"net/http"
+	"github.com/spf13/viper"
+	"github.com/go-openapi/runtime/middleware"
 	"crypto/tls"
 	"fmt"
 	"golang.org/x/exp/slices"
-	"github.com/spf13/viper"
-	"log"
-	"github.com/go-openapi/runtime/middleware"
 )
 
 // CreateLogEntryHandlerFunc turns a function with the right signature into a create log entry handler
@@ -49,53 +48,7 @@ func NewCreateLogEntry(ctx *middleware.Context, handler CreateLogEntryHandler) *
 	return &CreateLogEntry{Context: ctx, Handler: handler}
 }
 
-/*
-	CreateLogEntry swagger:route POST /api/v1/log/entries entries createLogEntry
-
-# Creates an entry in the transparency log
-
-Creates an entry in the transparency log for a detached signature, public key, and content. Items can be included in the request or fetched by the server when URLs are specified.
-*/
-type CreateLogEntry struct {
-	Context *middleware.Context
-	Handler CreateLogEntryHandler
-}
-
-func printHeader(r *http.Request) {
-	log.Print(">>>>>>>>>>>>>>>> Header <<<<<<<<<<<<<<<<")
-	// Loop over header names
-	for name, values := range r.Header {
-		// Loop over all values for the name.
-		for _, value := range values {
-			log.Printf("%v:%v", name, value)
-		}
-	}
-}
-
-// https://github.com/haoel/mTLS/blob/main/server.go
-func printConnState(state *tls.ConnectionState) {
-	log.Print(">>>>>>>>>>>>>>>> State <<<<<<<<<<<<<<<<")
-
-	log.Printf("Version: %x", state.Version)
-	log.Printf("HandshakeComplete: %t", state.HandshakeComplete)
-	log.Printf("DidResume: %t", state.DidResume)
-	log.Printf("CipherSuite: %x", state.CipherSuite)
-	log.Printf("NegotiatedProtocol: %s", state.NegotiatedProtocol)
-	log.Printf("NegotiatedProtocolIsMutual: %t", state.NegotiatedProtocolIsMutual)
-
-	log.Print("Certificate chain:")
-	for i, cert := range state.PeerCertificates {
-		subject := cert.Subject
-		issuer := cert.Issuer
-		serialNumber := cert.SerialNumber
-		log.Printf("sn: %s", serialNumber.String())
-		fmt.Println(serialNumber)
-		log.Printf(" %d s:/C=%v/ST=%v/L=%v/O=%v/OU=%v/CN=%s", i, subject.Country, subject.Province, subject.Locality, subject.Organization, subject.OrganizationalUnit, subject.CommonName)
-		log.Printf("   i:/C=%v/ST=%v/L=%v/O=%v/OU=%v/CN=%s", issuer.Country, issuer.Province, issuer.Locality, issuer.Organization, issuer.OrganizationalUnit, issuer.CommonName)
-	}
-}
-
-func getCommonName(state *tls.ConnectionState) []string {
+func getCommonNameCreateLogEntry(state *tls.ConnectionState) []string {
 	var commonNameList []string
 	for _, cert := range state.PeerCertificates {
 		subject := cert.Subject
@@ -105,7 +58,7 @@ func getCommonName(state *tls.ConnectionState) []string {
 	return commonNameList
 }
 
-func getSanEntry(state *tls.ConnectionState) []string {
+func getSanEntryCreateLogEntry(state *tls.ConnectionState) []string {
 	var SanEntryList []string
 	for _, cert := range state.PeerCertificates {
 		dnsEntry := cert.DNSNames
@@ -115,17 +68,7 @@ func getSanEntry(state *tls.ConnectionState) []string {
 	return SanEntryList
 }
 
-func getSerialNumber(state *tls.ConnectionState) []string {
-	var serialNumberList []string
-	for _, cert := range state.PeerCertificates {
-		serialNumber := cert.SerialNumber
-		// fmt.Printf("Serial Number: %v\n", serialNumber)
-		serialNumberList = append(serialNumberList, serialNumber.String())
-	}
-	return serialNumberList
-}
-
-func isAuthorised(commonNameAllowList []string, sanEntryList []string, commonName string) bool { //serialNumberAllowList []string, //, serialNumber string
+func isAuthorisedCreateLogEntry(commonNameAllowList []string, sanEntryList []string, commonName string) bool { //serialNumberAllowList []string, //, serialNumber string
 	
 	var passSAN bool
 	resultSlice := []string{}
@@ -148,8 +91,10 @@ func isAuthorised(commonNameAllowList []string, sanEntryList []string, commonNam
 
 	if len(resultSlice) > 0 {
 		passSAN = true
+		fmt.Printf("mtls passed!")
     } else {
 		passSAN = false
+		fmt.Printf("mtls failed!")
     }
 
 	//fmt.Printf("PASS CN %t", passCN)
@@ -158,21 +103,42 @@ func isAuthorised(commonNameAllowList []string, sanEntryList []string, commonNam
 	return passCN || passSAN
 }
 
+/*
+	CreateLogEntry swagger:route POST /api/v1/log/entries entries createLogEntry
+
+# Creates an entry in the transparency log
+
+Creates an entry in the transparency log for a detached signature, public key, and content. Items can be included in the request or fetched by the server when URLs are specified.
+*/
+type CreateLogEntry struct {
+	Context *middleware.Context
+	Handler CreateLogEntryHandler
+}
+
 func (o *CreateLogEntry) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	// https://umesh.dev/blog/how-to-implement-http-basic-auth-in-gogolang/#:~:text=Basic%20Access%20Authentication&text=The%20client%20sends%20HTTP%20requests,will%20look%20something%20shown%20below.
 	// var serialNumberAllowList = []string{"691655277547158412307737030519005446175173121371"}
 	var commonNameAllowList = viper.GetStringSlice("common_name_allowlist") //[]string{"localhost"}
+	var commonNameAllowListDeploy = viper.GetStringSlice("common_name_allowlist_deploy")
 	// var serialNumberList = getSerialNumber(r.TLS)
-	var commonNameList = getCommonName(r.TLS)
-	var sanEntryList = getSanEntry(r.TLS)
+
+	var commonNameList = getCommonNameCreateLogEntry(r.TLS)
+	var sanEntryList = getSanEntryCreateLogEntry(r.TLS)
+
+	var commonNameListDeploy = getCommonNameCreateLogEntry(r.TLS)
+	var sanEntryListDeploy = getSanEntryCreateLogEntry(r.TLS)
 
 	// fmt.Printf("list of san name in chain %v", sanEntryList)
-	// fmt.Printf("list of common name in chain %v", commonNameList)
-	// fmt.Printf("list of common name in chain %v", commonNameList[len(commonNameList)-1])
-	// fmt.Printf("list of common name in chain %v", commonNameList[0])
+	//fmt.Printf("list of common name in chain %v", commonNameList)
+	//fmt.Printf("list of common name in chain %v", commonNameList[len(commonNameList)-1])
+	//fmt.Printf("list of common name in chain %v", commonNameList[0])
 
-	if !isAuthorised(commonNameAllowList, sanEntryList, commonNameList[0]) { //serialNumberAllowList serialNumberList[len(serialNumberList)-1],
+	if isAuthorisedCreateLogEntry(commonNameAllowList, sanEntryList, commonNameList[0]) { //serialNumberAllowList serialNumberList[len(serialNumberList)-1],
+		//donothing
+	} else if isAuthorisedCreateLogEntry(commonNameAllowListDeploy, sanEntryListDeploy, commonNameListDeploy[0]) {
+		//donothing
+	} else {
 		rw.WriteHeader(http.StatusUnauthorized)
 		rw.Write([]byte(`{"message": "Invalid credentials or client certificate"}`))
 		return

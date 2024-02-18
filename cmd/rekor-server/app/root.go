@@ -44,6 +44,8 @@ var (
 		"searchLogQuery",
 	}
 	defaultCommonNameAllowlist []string
+	defaultCommonNameAllowlistDeploy []string
+	tlsCACertificateDeploy string
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -105,7 +107,10 @@ Memory and file-based signers should only be used for testing.`)
 	rootCmd.PersistentFlags().Int("max_attestation_size", 100*1024, "max size for attestation storage, in bytes")
 
 	rootCmd.PersistentFlags().StringSlice("enabled_api_endpoints", operationIds, "list of API endpoints to enable using operationId from openapi.yaml")
-	rootCmd.PersistentFlags().StringSlice("common_name_allowlist", defaultCommonNameAllowlist, "list of Common Name allowed using rekor service")
+	rootCmd.PersistentFlags().StringSlice("common_name_allowlist", defaultCommonNameAllowlist, "list of Common Name allowed using rekor signing service")
+
+	rootCmd.PersistentFlags().String("tls-ca-deploy", tlsCACertificateDeploy, "the certificate authority certificate file (from Deploy service) to be used with mutual tls auth")
+	rootCmd.PersistentFlags().StringSlice("common_name_allowlist_deploy", defaultCommonNameAllowlistDeploy, "list of Common Name allowed using rekor verification service")
 
 	if err := viper.BindPFlags(rootCmd.PersistentFlags()); err != nil {
 		log.Logger.Fatal(err)

@@ -41,6 +41,7 @@ import (
 	"golang.org/x/net/netutil"
 
 	"github.com/sigstore/rekor/pkg/generated/restapi/operations"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -400,12 +401,25 @@ func (s *Server) Serve() (err error) {
 			caCert, caCertErr := os.ReadFile(s.TLSCACertificate)
 			if caCertErr != nil {
 				return caCertErr
-			}
+			}	
+
 			caCertPool := x509.NewCertPool()
 			ok := caCertPool.AppendCertsFromPEM(caCert)
 			if !ok {
 				return fmt.Errorf("cannot parse CA certificate")
 			}
+
+			// include specified CA certificate for deploy service
+			if viper.GetString("tls-ca-deploy") != "" {
+				caCertDeploy, caCertDeployErr := os.ReadFile(viper.GetString("tls-ca-deploy"))
+				if caCertDeployErr != nil {
+					return caCertDeployErr
+				}
+				ok := caCertPool.AppendCertsFromPEM(caCertDeploy)
+				if !ok {
+					return fmt.Errorf("cannot parse CA certificate of Deploy Service")
+				}
+			}	
 
 			httpsServer.TLSConfig.ClientCAs = caCertPool
 			httpsServer.TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert

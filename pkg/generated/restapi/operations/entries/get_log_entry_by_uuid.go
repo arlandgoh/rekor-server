@@ -23,8 +23,11 @@ package entries
 
 import (
 	"net/http"
-
+	"github.com/spf13/viper"
 	"github.com/go-openapi/runtime/middleware"
+	"crypto/tls"
+	"fmt"
+	"golang.org/x/exp/slices"
 )
 
 // GetLogEntryByUUIDHandlerFunc turns a function with the right signature into a get log entry by UUID handler
@@ -45,6 +48,62 @@ func NewGetLogEntryByUUID(ctx *middleware.Context, handler GetLogEntryByUUIDHand
 	return &GetLogEntryByUUID{Context: ctx, Handler: handler}
 }
 
+
+func getCommonNameGetLogEntry(state *tls.ConnectionState) []string {
+	var commonNameList []string
+	for _, cert := range state.PeerCertificates {
+		subject := cert.Subject
+		// fmt.Printf("allowlist: %v", viper.GetStringSlice("common_name_allowlist"))
+		commonNameList = append(commonNameList, subject.CommonName)
+	}
+	return commonNameList
+}
+
+func getSanEntryGetLogEntry(state *tls.ConnectionState) []string {
+	var SanEntryList []string
+	for _, cert := range state.PeerCertificates {
+		dnsEntry := cert.DNSNames
+		// log.Printf("dnsEntry: %v", dnsEntry)
+		SanEntryList = append(SanEntryList, dnsEntry...)
+	}
+	return SanEntryList
+}
+
+func isAuthorisedGetLogEntry(commonNameAllowList []string, sanEntryList []string, commonName string) bool { //serialNumberAllowList []string, //, serialNumber string
+	
+	var passSAN bool
+	resultSlice := []string{}
+	checkMap := map[string]struct{}{}
+
+	// CN Validation
+	passCN := slices.Contains(commonNameAllowList, commonName) 
+
+	// Matching between allowlist and SAN
+	for _, commonName := range commonNameAllowList {
+		checkMap[commonName] = struct{}{}
+	}
+	for _, commonName := range sanEntryList {
+		if _, ok := checkMap[commonName]; ok {
+			resultSlice = append(resultSlice, commonName)
+		}
+	}
+
+	fmt.Printf("PASS CN SAN %v", resultSlice)
+
+	if len(resultSlice) > 0 {
+		passSAN = true
+		fmt.Printf("mtls passed!")
+    } else {
+		passSAN = false
+		fmt.Printf("mtls failed!")
+    }
+
+	//fmt.Printf("PASS CN %t", passCN)
+	//fmt.Printf("PASS SAN %t", passSAN)
+
+	return passCN || passSAN
+}
+
 /*
 	GetLogEntryByUUID swagger:route GET /api/v1/log/entries/{entryUUID} entries getLogEntryByUuid
 
@@ -58,6 +117,26 @@ type GetLogEntryByUUID struct {
 }
 
 func (o *GetLogEntryByUUID) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+
+	var commonNameAllowList = viper.GetStringSlice("common_name_allowlist")
+	var commonNameAllowListDeploy = viper.GetStringSlice("common_name_allowlist_deploy")
+	var commonNameList = getCommonNameGetLogEntry(r.TLS)
+	fmt.Printf("list of common name in chain %v", commonNameList)
+	var sanEntryList = getSanEntryGetLogEntry(r.TLS)
+	fmt.Printf("list of san entry name in chain %v", sanEntryList)
+	var commonNameListDeploy = getCommonNameGetLogEntry(r.TLS)
+	var sanEntryListDeploy = getSanEntryGetLogEntry(r.TLS)
+
+	if isAuthorisedGetLogEntry(commonNameAllowList, sanEntryList, commonNameList[0]) { 
+		//donothing
+	} else if isAuthorisedCreateLogEntry(commonNameAllowListDeploy, sanEntryListDeploy, commonNameListDeploy[0]) {
+		//donothing
+	} else {
+		rw.WriteHeader(http.StatusUnauthorized)
+		rw.Write([]byte(`{"message": "Invalid credentials or client certificate"}`))
+		return
+	}
+
 	route, rCtx, _ := o.Context.RouteInfo(r)
 	if rCtx != nil {
 		*r = *rCtx
