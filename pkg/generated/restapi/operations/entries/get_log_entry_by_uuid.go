@@ -88,14 +88,22 @@ func isAuthorisedGetLogEntry(commonNameAllowList []string, sanEntryList []string
 		}
 	}
 
-	fmt.Printf("PASS CN SAN %v", resultSlice)
+	fmt.Printf("PASS CN %v; ", passCN)
+
+	if passCN ==true {
+		fmt.Printf("Passed CN? %v; ", passCN)
+	} else {
+		fmt.Printf("Passed CN? %v; ", passCN)
+	}
+
+	fmt.Printf("PASS SAN %v", resultSlice)
 
 	if len(resultSlice) > 0 {
 		passSAN = true
-		fmt.Printf("mtls passed!")
+		fmt.Printf("Passed SAN? %v", passSAN)
     } else {
 		passSAN = false
-		fmt.Printf("mtls failed!")
+		fmt.Printf("Passed SAN? %v", passSAN)
     }
 
 	//fmt.Printf("PASS CN %t", passCN)
@@ -121,11 +129,24 @@ func (o *GetLogEntryByUUID) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	var commonNameAllowList = viper.GetStringSlice("common_name_allowlist")
 	var commonNameAllowListDeploy = viper.GetStringSlice("common_name_allowlist_deploy")
 	var commonNameList = getCommonNameGetLogEntry(r.TLS)
-	fmt.Printf("list of common name in chain %v", commonNameList)
+	// fmt.Printf("list of common name in chain %v", commonNameList)
 	var sanEntryList = getSanEntryGetLogEntry(r.TLS)
-	fmt.Printf("list of san entry name in chain %v", sanEntryList)
+	// fmt.Printf("list of san entry name in chain %v", sanEntryList)
+
+	if (len(commonNameList) <= 0) && (len(sanEntryList) <= 0) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		rw.Write([]byte(`{"message": "Invalid client certificate"}`))
+		return           
+	}
+
 	var commonNameListDeploy = getCommonNameGetLogEntry(r.TLS)
 	var sanEntryListDeploy = getSanEntryGetLogEntry(r.TLS)
+
+	if (len(commonNameListDeploy) <= 0) && (len(sanEntryListDeploy) <= 0) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		rw.Write([]byte(`{"message": "Invalid client certificate"}`))
+		return           
+	}
 
 	if isAuthorisedGetLogEntry(commonNameAllowList, sanEntryList, commonNameList[0]) { 
 		//donothing

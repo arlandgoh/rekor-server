@@ -87,14 +87,22 @@ func isAuthorisedCreateLogEntry(commonNameAllowList []string, sanEntryList []str
 		}
 	}
 
-	fmt.Printf("PASS CN SAN %v", resultSlice)
+	fmt.Printf("PASS CN %v", passCN)
+
+	if passCN ==true {
+		fmt.Printf("Passed CN? %v; ", passCN)
+	} else {
+		fmt.Printf("Passed CN? %v; ", passCN)
+	}
+
+	fmt.Printf("PASS SAN %v", resultSlice)
 
 	if len(resultSlice) > 0 {
 		passSAN = true
-		fmt.Printf("mtls passed!")
+		fmt.Printf("Passed SAN? %v; ", passSAN)
     } else {
 		passSAN = false
-		fmt.Printf("mtls failed!")
+		fmt.Printf("Passed SAN? %v; ", passSAN)
     }
 
 	//fmt.Printf("PASS CN %t", passCN)
@@ -126,8 +134,20 @@ func (o *CreateLogEntry) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	var commonNameList = getCommonNameCreateLogEntry(r.TLS)
 	var sanEntryList = getSanEntryCreateLogEntry(r.TLS)
 
+	if (len(commonNameList) <= 0) && (len(sanEntryList) <= 0) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		rw.Write([]byte(`{"message": "Invalid client certificate"}`))
+		return           
+	}
+
 	var commonNameListDeploy = getCommonNameCreateLogEntry(r.TLS)
 	var sanEntryListDeploy = getSanEntryCreateLogEntry(r.TLS)
+
+	if (len(commonNameListDeploy) <= 0) && (len(sanEntryListDeploy) <= 0) {
+		rw.WriteHeader(http.StatusUnauthorized)
+		rw.Write([]byte(`{"message": "Invalid client certificate"}`))
+		return           
+	}
 
 	// fmt.Printf("list of san name in chain %v", sanEntryList)
 	//fmt.Printf("list of common name in chain %v", commonNameList)
