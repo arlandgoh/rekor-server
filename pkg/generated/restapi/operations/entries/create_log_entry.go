@@ -134,16 +134,10 @@ func (o *CreateLogEntry) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	var commonNameList = getCommonNameCreateLogEntry(r.TLS)
 	var sanEntryList = getSanEntryCreateLogEntry(r.TLS)
 
-	if (len(commonNameList) <= 0) && (len(sanEntryList) <= 0) {
-		rw.WriteHeader(http.StatusUnauthorized)
-		rw.Write([]byte(`{"message": "Invalid client certificate"}`))
-		return           
-	}
-
 	var commonNameListDeploy = getCommonNameCreateLogEntry(r.TLS)
 	var sanEntryListDeploy = getSanEntryCreateLogEntry(r.TLS)
 
-	if (len(commonNameListDeploy) <= 0) && (len(sanEntryListDeploy) <= 0) {
+	if (len(commonNameList) <= 0) && (len(sanEntryList) <= 0) && (len(commonNameListDeploy) <= 0) && (len(sanEntryListDeploy) <= 0) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		rw.Write([]byte(`{"message": "Invalid client certificate"}`))
 		return           

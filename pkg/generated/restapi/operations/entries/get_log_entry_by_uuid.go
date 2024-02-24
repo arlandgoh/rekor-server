@@ -128,21 +128,17 @@ func (o *GetLogEntryByUUID) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	var commonNameAllowList = viper.GetStringSlice("common_name_allowlist")
 	var commonNameAllowListDeploy = viper.GetStringSlice("common_name_allowlist_deploy")
+	
 	var commonNameList = getCommonNameGetLogEntry(r.TLS)
-	// fmt.Printf("list of common name in chain %v", commonNameList)
 	var sanEntryList = getSanEntryGetLogEntry(r.TLS)
-	// fmt.Printf("list of san entry name in chain %v", sanEntryList)
-
-	if (len(commonNameList) <= 0) && (len(sanEntryList) <= 0) {
-		rw.WriteHeader(http.StatusUnauthorized)
-		rw.Write([]byte(`{"message": "Invalid client certificate"}`))
-		return           
-	}
-
+	
 	var commonNameListDeploy = getCommonNameGetLogEntry(r.TLS)
 	var sanEntryListDeploy = getSanEntryGetLogEntry(r.TLS)
 
-	if (len(commonNameListDeploy) <= 0) && (len(sanEntryListDeploy) <= 0) {
+	// fmt.Printf("list of san entry name in chain %v", sanEntryList)
+	// fmt.Printf("list of common name in chain %v", commonNameList)
+
+	if (len(commonNameList) <= 0) && (len(sanEntryList) <= 0) && (len(commonNameListDeploy) <= 0) && (len(sanEntryListDeploy) <= 0) {
 		rw.WriteHeader(http.StatusUnauthorized)
 		rw.Write([]byte(`{"message": "Invalid client certificate"}`))
 		return           
